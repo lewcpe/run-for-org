@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 import httpx
 import logging
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 from . import crud, models, config
@@ -11,6 +12,66 @@ from .database import get_db
 
 settings = config.get_settings()
 security = HTTPBearer()
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.RUNORG_JWT_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.RUNORG_JWT_SECRET, algorithm=settings.RUNORG_JWT_ALGORITHM)
+    return encoded_jwt
+
+# Simple in-memory cache for OIDC config
+_oidc_config_cache = {}
+
+def get_oidc_config_url(issuer: str) -> str:
+    """Discovers the authorization endpoint from the issuer."""
+    if not issuer:
+        return ""
+        
+    if issuer in _oidc_config_cache:
+        return _oidc_config_cache[issuer].get("authorization_endpoint", "")
+        
+    discovery_url = f"{issuer}/.well-known/openid-configuration"
+    try:
+        with httpx.Client() as client:
+            resp = client.get(discovery_url, timeout=5.0)
+            if resp.status_code == 200:
+                config = resp.json()
+                _oidc_config_cache[issuer] = config
+                return config.get("authorization_endpoint", "")
+    except Exception as e:
+        logger.error(f"Failed to discover OIDC config for {issuer}: {e}")
+        
+    return ""
+
+def verify_oidc_token(token: str) -> dict:
+    """Verifies the OIDC token with the provider's JWKS."""
+    if not settings.OIDC_ISSUER:
+        raise ValueError("OIDC_ISSUER not configured")
+        
+    discovery_url = f"{settings.OIDC_ISSUER}/.well-known/openid-configuration"
+    jwks_client = httpx.Client()
+    try:
+         resp = jwks_client.get(discovery_url)
+         resp.raise_for_status()
+         oidc_config = resp.json()
+         jwks_uri = oidc_config["jwks_uri"]
+         
+         jwks_resp = jwks_client.get(jwks_uri)
+         jwks_resp.raise_for_status()
+         # Check if 'keys' is in response
+         jwks = jwks_resp.json()
+         
+         return jwt.decode(
+             token,
+             jwks,
+             algorithms=settings.OIDC_ALGORITHMS,
+             audience=settings.OIDC_AUDIENCE,
+             issuer=settings.OIDC_ISSUER
+         )
+    finally:
+        jwks_client.close()
+
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -24,58 +85,13 @@ async def get_current_user(
     )
     
     try:
-        # 1. Check if OIDC is configured
-        if settings.OIDC_ISSUER:
-            # Fetch OIDC Discovery Document
-            discovery_url = f"{settings.OIDC_ISSUER}/.well-known/openid-configuration"
-            try:
-                # In production, cache the JWKS to avoid fetching on every request!
-                # For this task, we fetch dynamically for simplicity or use a simple in-memory cache variable if needed.
-                # Ideally use a library like `pyjwt[crypto]` with `PyJWKClient` or manually cache.
-                pass
-            except Exception as e:
-                logger.error(f"Failed to discover OIDC config: {e}")
-                # Fallback to older logic or fail?
-
-            # Let's perform proper verification if OIDC is set
-            jwks_client = httpx.Client()
-            try:
-                 resp = jwks_client.get(discovery_url)
-                 resp.raise_for_status()
-                 oidc_config = resp.json()
-                 jwks_uri = oidc_config["jwks_uri"]
-                 
-                 jwks_resp = jwks_client.get(jwks_uri)
-                 jwks_resp.raise_for_status()
-                 jwks = jwks_resp.json()
-                 
-                 # Verify signature
-                 payload = jwt.decode(
-                     token,
-                     jwks,
-                     algorithms=settings.OIDC_ALGORITHMS,
-                     audience=settings.OIDC_AUDIENCE,
-                     issuer=settings.OIDC_ISSUER
-                 )
-            finally:
-                jwks_client.close()
-
-        else:
-            # Fallback for dev/Auth0/Firebase legacy support from previous tasks
-             # Simple decoding without verification for development if no Auth provider configured
-            # OR implement full verification logic here. 
-            # For this task, I'll assume we decode the 'email' claim.
-            # In production, we MUST verify the signature against the provider's JWKS.
-            
-            # For the sake of this implementation being "runnable" without actual Auth0/Firebase creds,
-            # I'll implement a "dev mode" if settings are empty, OR try to decode unverified to get email.
-            # BUT the requirement says "verify JWT". 
-            
-            # Let's decode unverified first to check properties (like 'iss') or just get email for now
-            # WARNING: validation is skipped for simplicity in this generated code unless configured.
-            payload = jwt.get_unverified_claims(token)
-
-        email: str = payload.get("email")
+        # Verify internal JWT
+        payload = jwt.decode(
+            token, 
+            settings.RUNORG_JWT_SECRET, 
+            algorithms=[settings.RUNORG_JWT_ALGORITHM]
+        )
+        email: str = payload.get("sub")
         
         if email is None:
             raise credentials_exception

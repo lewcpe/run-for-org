@@ -88,7 +88,12 @@ To test OIDC integration locally using Dex:
    ```bash
    uv run uvicorn backend.main:app --reload
    ```
-4. Authenticate: Get a token from Dex (using a client logic or manual flow) and use it in the `Authorization` header.
+5. **Authenticate**: 
+    - Configure Dex to redirect to `http://127.0.0.1:8000/api/auth/callback`.
+    - The backend will return an **Internal JWT**.
+    - Use this JWT in the `Authorization` header for API requests.
+
+See [AUTHEN.md](AUTHEN.md) for detailed authentication guide.
 
 ## API Overview
 

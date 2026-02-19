@@ -22,7 +22,17 @@ class Settings(BaseSettings):
     # Generic OIDC Config
     OIDC_ISSUER: str = ""
     OIDC_AUDIENCE: str = ""
+    OIDC_CLIENT_ID: str = ""
+    OIDC_CLIENT_SECRET: str = ""
+    OIDC_CALLBACK_URL: str = ""
+    OIDC_CALLBACK_URL: str = ""
     OIDC_ALGORITHMS: List[str] = ["RS256"]
+    OIDC_AUTH_URL: str = "" # Optional, for frontend redirect
+    
+    # Internal JWT Config
+    RUNORG_JWT_SECRET: str = "change-this-to-secure-random-secret"
+    RUNORG_JWT_ALGORITHM: str = "HS256"
+    RUNORG_JWT_EXPIRE_MINUTES: int = 60
 
     model_config = SettingsConfigDict(env_file=".env")
 
