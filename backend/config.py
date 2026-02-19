@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+from typing import List
 
 class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./sql_app.db"
@@ -17,6 +18,11 @@ class Settings(BaseSettings):
     AUTH0_DOMAIN: str = ""
     AUTH0_AUDIENCE: str = ""
     FIREBASE_PROJECT_ID: str = ""
+    
+    # Generic OIDC Config
+    OIDC_ISSUER: str = ""
+    OIDC_AUDIENCE: str = ""
+    OIDC_ALGORITHMS: List[str] = ["RS256"]
 
     model_config = SettingsConfigDict(env_file=".env")
 

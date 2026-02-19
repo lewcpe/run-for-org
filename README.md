@@ -70,6 +70,26 @@ Run the test suite using pytest:
 uv run python -m pytest backend/tests/test_api.py
 ```
 
+## Running with Dex (OIDC Testing)
+
+To test OIDC integration locally using Dex:
+
+1. Start Dex:
+   ```bash
+   docker-compose up -d
+   ```
+2. Configure `.env` to use Dex:
+   ```env
+   # ... other configs ...
+   OIDC_ISSUER=http://127.0.0.1:5556/dex
+   OIDC_AUDIENCE=example-app
+   ```
+3. Start Backend:
+   ```bash
+   uv run uvicorn backend.main:app --reload
+   ```
+4. Authenticate: Get a token from Dex (using a client logic or manual flow) and use it in the `Authorization` header.
+
 ## API Overview
 
 - **`GET /api/config`**: Get public configuration (start date, end date, goals).
