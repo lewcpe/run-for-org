@@ -1,0 +1,18 @@
+[project]
+name = "run-for-org"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "alembic>=1.18.4",
+    "fastapi>=0.129.0",
+    "httpx>=0.28.1",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.13.0",
+    "pytest>=9.0.2",
+    "python-dotenv>=1.2.1",
+    "python-jose[cryptography]>=3.5.0",
+    "sqlalchemy>=2.0.46",
+    "uvicorn[standard]>=0.41.0",
+]
